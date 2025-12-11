@@ -2,6 +2,9 @@ const CACHE_NAME = 'sakupintar-v2';
 const urlsToCache = [
   './',
   './index.html',
+  './icons/icon.svg',
+  './style.css',
+  './manifest.json',
   'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap'
 ];
 
@@ -13,6 +16,7 @@ self.addEventListener('install', (event) => {
       return cache.addAll(urlsToCache);
     })
   );
+  self.skipWaiting();
 });
 
 // Activate SW (Clean up old caches)
@@ -29,12 +33,22 @@ self.addEventListener('activate', (event) => {
       );
     })
   );
+  self.clients.claim();
 });
 
 // Fetch (Stale-while-revalidate strategy)
 self.addEventListener('fetch', (event) => {
   // Skip cross-origin requests regarding chrome-extension or unsupported schemes
   if (!event.request.url.startsWith('http')) return;
+  if (event.request.method !== 'GET') return;
+
+  // Navigation fallback for SPA
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request).catch(() => caches.match('./index.html'))
+    );
+    return;
+  }
 
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
@@ -43,7 +57,7 @@ self.addEventListener('fetch', (event) => {
         if (
           !networkResponse ||
           networkResponse.status !== 200 ||
-          networkResponse.type !== 'basic'
+          (networkResponse.type !== 'basic' && networkResponse.type !== 'cors')
         ) {
           return networkResponse;
         }

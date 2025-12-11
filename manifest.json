@@ -8,13 +8,8 @@
   "orientation": "portrait",
   "icons": [
     {
-      "src": "https://lucide.dev/logo.svg",
-      "sizes": "192x192",
-      "type": "image/svg+xml"
-    },
-    {
-      "src": "https://lucide.dev/logo.svg",
-      "sizes": "512x512",
+      "src": "./icons/icon.svg",
+      "sizes": "any",
       "type": "image/svg+xml"
     }
   ]
