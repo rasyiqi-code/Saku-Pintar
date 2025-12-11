@@ -1,4 +1,4 @@
-import { GoogleGenAI, Chat, GenerateContentResponse, FunctionDeclaration, Type } from "@google/genai";
+import { GoogleGenAI, Chat, GenerateContentResponse, FunctionDeclaration, Type, createPartFromFunctionResponse } from "@google/genai";
 import { Transaction, ChatMessage, CategoryState, TransactionType, NeedsWantsSummary, PurchaseAnalysis } from "../types";
 
 // --- API Key Retrieval Logic ---
@@ -21,11 +21,12 @@ const getApiKey = (): string => {
 };
 
 const apiKey = getApiKey();
-
-// Initialize Gemini Client
-// We use a dummy key if missing to prevent the app from crashing immediately on load.
-// API calls will fail gracefully later if the key is invalid.
-const ai = new GoogleGenAI({ apiKey: apiKey || 'API_KEY_NOT_SET' });
+let aiClient: GoogleGenAI | null = null;
+const getClient = (): GoogleGenAI | null => {
+  if (!apiKey) return null;
+  if (!aiClient) aiClient = new GoogleGenAI({ apiKey });
+  return aiClient;
+};
 
 // --- Tool Definitions ---
 
@@ -95,7 +96,9 @@ export const analyzeFinances = async (transactions: Transaction[]): Promise<stri
       Jika tidak ada data, berikan tips umum menabung untuk pelajar.
     `;
 
-    const response = await ai.models.generateContent({
+    const client = getClient();
+    if (!client) return "API Key belum disetting. Mohon konfigurasi VITE_API_KEY di Vercel.";
+    const response = await client.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: prompt,
       config: {
@@ -156,7 +159,9 @@ export const parseTransactionWithAI = async (
       }
     `;
 
-    const response = await ai.models.generateContent({
+    const client = getClient();
+    if (!client) return null;
+    const response = await client.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: prompt,
       config: {
@@ -208,7 +213,9 @@ export const analyzeNeedsWantsBatch = async (transactions: Transaction[]): Promi
       }
     `;
 
-    const response = await ai.models.generateContent({
+    const client = getClient();
+    if (!client) return null;
+    const response = await client.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: prompt,
       config: {
@@ -285,7 +292,15 @@ export const analyzePurchase = async (item: string, price: number, reason: strin
       }
     `;
 
-    const response = await ai.models.generateContent({
+    const client = getClient();
+    if (!client) return {
+      verdict: 'WANT',
+      score: 0,
+      reasoning: "API Key tidak ditemukan.",
+      recommendation: "Gagal memuat AI.",
+      alternatives: "-"
+    };
+    const response = await client.models.generateContent({
       model: 'gemini-2.5-flash',
       contents: prompt,
       config: {
@@ -312,15 +327,14 @@ export const analyzePurchase = async (item: string, price: number, reason: strin
 /**
  * Creates a chat session for the AI Advisor using Gemini Pro.
  */
-export const createChatSession = (categories: CategoryState): Chat => {
-  if (!apiKey) {
-    console.error("API Key missing when creating chat session");
-  }
+export const createChatSession = (categories: CategoryState): Chat | null => {
+  const client = getClient();
+  if (!client) return null;
 
   const incomeCats = categories.INCOME.join(', ');
   const expenseCats = categories.EXPENSE.join(', ');
 
-  return ai.chats.create({
+  return client.chats.create({
     model: 'gemini-3-pro-preview',
     config: {
       tools: [{ functionDeclarations: [addTransactionTool] }],
@@ -382,15 +396,8 @@ export const sendChatMessage = async (chat: Chat, message: string): Promise<Chat
  */
 export const sendToolResponse = async (chat: Chat, toolCallId: string, functionName: string, result: any): Promise<string> => {
   try {
-    const response = await chat.sendMessage({
-      toolResponse: {
-        functionResponses: [{
-          id: toolCallId,
-          name: functionName,
-          response: { result: result }
-        }]
-      }
-    });
+    const part = createPartFromFunctionResponse(toolCallId, functionName, { result });
+    const response = await chat.sendMessage({ message: [part] });
     return response.text || "Oke!";
   } catch (error) {
     console.error("Tool response error:", error);
