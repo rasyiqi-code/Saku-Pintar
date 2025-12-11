@@ -1,8 +1,31 @@
 import { GoogleGenAI, Chat, GenerateContentResponse, FunctionDeclaration, Type } from "@google/genai";
 import { Transaction, ChatMessage, CategoryState, TransactionType, NeedsWantsSummary, PurchaseAnalysis } from "../types";
 
+// --- API Key Retrieval Logic ---
+const getApiKey = (): string => {
+  // 1. Vite (Standard for modern React apps)
+  // @ts-ignore
+  if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_KEY) {
+    // @ts-ignore
+    return import.meta.env.VITE_API_KEY;
+  }
+  // 2. Create React App (CRA)
+  if (typeof process !== 'undefined' && process.env?.REACT_APP_API_KEY) {
+    return process.env.REACT_APP_API_KEY;
+  }
+  // 3. Fallback / Manual Process Env
+  if (typeof process !== 'undefined' && process.env?.API_KEY) {
+    return process.env.API_KEY;
+  }
+  return '';
+};
+
+const apiKey = getApiKey();
+
 // Initialize Gemini Client
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// We use a dummy key if missing to prevent the app from crashing immediately on load.
+// API calls will fail gracefully later if the key is invalid.
+const ai = new GoogleGenAI({ apiKey: apiKey || 'API_KEY_NOT_SET' });
 
 // --- Tool Definitions ---
 
@@ -54,6 +77,8 @@ export interface ChatInteractionResult {
  * Uses Gemini Flash for quick analysis of financial data.
  */
 export const analyzeFinances = async (transactions: Transaction[]): Promise<string> => {
+  if (!apiKey) return "API Key belum disetting. Mohon konfigurasi VITE_API_KEY di Vercel.";
+
   try {
     const transactionSummary = transactions.map(t => 
       `- ${t.date.split('T')[0]}: ${t.type} Rp${t.amount} (${t.category}) - ${t.description}`
@@ -98,6 +123,11 @@ export const parseTransactionWithAI = async (
   date: string;
   description: string;
 } | null> => {
+  if (!apiKey) {
+    alert("API Key missing. Please set VITE_API_KEY.");
+    return null;
+  }
+
   try {
     const today = new Date().toISOString().split('T')[0];
     const prompt = `
@@ -148,6 +178,8 @@ export const parseTransactionWithAI = async (
  * Batch analyzes transactions to categorize them as NEEDS or WANTS.
  */
 export const analyzeNeedsWantsBatch = async (transactions: Transaction[]): Promise<NeedsWantsSummary | null> => {
+  if (!apiKey) return null;
+
   try {
     const expenseTransactions = transactions.filter(t => t.type === 'EXPENSE');
     
@@ -221,6 +253,16 @@ export const analyzeNeedsWantsBatch = async (transactions: Transaction[]): Promi
  * Analyzes a specific potential purchase to determine if it is a Need or Want.
  */
 export const analyzePurchase = async (item: string, price: number, reason: string): Promise<PurchaseAnalysis> => {
+  if (!apiKey) {
+    return {
+      verdict: 'WANT',
+      score: 0,
+      reasoning: "API Key tidak ditemukan. Cek konfigurasi Vercel.",
+      recommendation: "Gagal memuat AI.",
+      alternatives: "-"
+    };
+  }
+
   try {
     const prompt = `
       Analyze this potential purchase for a student:
@@ -271,6 +313,10 @@ export const analyzePurchase = async (item: string, price: number, reason: strin
  * Creates a chat session for the AI Advisor using Gemini Pro.
  */
 export const createChatSession = (categories: CategoryState): Chat => {
+  if (!apiKey) {
+    console.error("API Key missing when creating chat session");
+  }
+
   const incomeCats = categories.INCOME.join(', ');
   const expenseCats = categories.EXPENSE.join(', ');
 
@@ -306,6 +352,8 @@ export const createChatSession = (categories: CategoryState): Chat => {
  * Sends a message to the chat session and handles potential tool calls.
  */
 export const sendChatMessage = async (chat: Chat, message: string): Promise<ChatInteractionResult> => {
+  if (!apiKey) return { text: "API Key belum disetting. Mohon atur Environment Variable di Vercel (VITE_API_KEY)." };
+
   try {
     const result: GenerateContentResponse = await chat.sendMessage({ message });
     
