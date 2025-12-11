@@ -216,14 +216,14 @@ const Analytics: React.FC<AnalyticsProps> = ({ transactions }) => {
           <div className="flex gap-2">
             <button 
               onClick={() => exportToPDF(monthlyTransactions, currentMonthLabel)}
-              className="flex-1 flex items-center justify-center gap-2 bg-rose-50 text-rose-600 border border-rose-200 px-4 py-3 rounded-xl text-sm font-bold hover:bg-rose-100 transition shadow-sm"
+              className="flex-1 flex items-center justify-center gap-2 bg-rose-50 text-rose-600 border border-rose-200 px-4 py-3 rounded-xl text-sm font-bold hover:bg-rose-100 transition shadow-sm active:scale-95"
             >
               <FileText size={18} />
               Export PDF
             </button>
             <button 
               onClick={() => exportToExcel(monthlyTransactions, currentMonthLabel)}
-              className="flex-1 flex items-center justify-center gap-2 bg-emerald-50 text-emerald-600 border border-emerald-200 px-4 py-3 rounded-xl text-sm font-bold hover:bg-emerald-100 transition shadow-sm"
+              className="flex-1 flex items-center justify-center gap-2 bg-emerald-50 text-emerald-600 border border-emerald-200 px-4 py-3 rounded-xl text-sm font-bold hover:bg-emerald-100 transition shadow-sm active:scale-95"
             >
               <FileSpreadsheet size={18} />
               Export Excel

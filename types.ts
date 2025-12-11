@@ -9,6 +9,20 @@ export interface Transaction {
   type: TransactionType;
 }
 
+export type DebtType = 'PAYABLE' | 'RECEIVABLE'; // PAYABLE = Hutang (I owe), RECEIVABLE = Piutang (Owes me)
+export type DebtStatus = 'UNPAID' | 'PAID';
+
+export interface DebtRecord {
+  id: string;
+  person: string;
+  amount: number;
+  date: string;
+  dueDate: string;
+  description: string;
+  type: DebtType;
+  status: DebtStatus;
+}
+
 export interface Goal {
   id: string;
   name: string;
@@ -29,6 +43,7 @@ export enum Page {
   DASHBOARD = 'DASHBOARD',
   TRANSACTIONS = 'TRANSACTIONS',
   GOALS = 'GOALS', // Now represents "Financial Health / CSIZ"
+  DEBTS = 'DEBTS',
   CHAT = 'CHAT',
   ANALYTICS = 'ANALYTICS'
 }
@@ -39,7 +54,7 @@ export interface CategoryState {
 }
 
 export const DEFAULT_CATEGORIES: CategoryState = {
-  INCOME: ['Uang Saku', 'Hadiah', 'Kerja Part-time', 'Lainnya'],
+  INCOME: ['Uang Saku', 'Hadiah', 'Kerja Part-time', 'Pelunasan Hutang (Masuk)', 'Lainnya'],
   EXPENSE: [
     'Makanan', 
     'Transportasi', 
@@ -49,6 +64,7 @@ export const DEFAULT_CATEGORIES: CategoryState = {
     'Tabungan', // For 'S'
     'Investasi', // For 'I'
     'Zakat/Infaq/Sedekah', // For 'Z'
+    'Bayar Hutang (Keluar)',
     'Lainnya'
   ]
 };

@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Receipt, MessageSquareText, PieChart, Wallet, Target } from 'lucide-react';
+import { LayoutDashboard, Receipt, PieChart, Wallet, Target, Handshake } from 'lucide-react';
 import { Page } from '../types';
 
 interface NavbarProps {
@@ -11,13 +11,13 @@ const Navbar: React.FC<NavbarProps> = ({ currentPage, setPage }) => {
   const navItems = [
     { page: Page.DASHBOARD, label: 'Beranda', icon: LayoutDashboard },
     { page: Page.TRANSACTIONS, label: 'Transaksi', icon: Receipt },
-    { page: Page.GOALS, label: 'Kesehatan', icon: Target }, // Changed label
+    { page: Page.GOALS, label: 'Kesehatan', icon: Target },
+    { page: Page.DEBTS, label: 'Hutang', icon: Handshake },
     { page: Page.ANALYTICS, label: 'Analisis', icon: PieChart },
-    { page: Page.CHAT, label: 'AI Chat', icon: MessageSquareText },
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-4 py-2 sm:relative sm:border-t-0 sm:border-r sm:w-64 sm:h-screen sm:flex sm:flex-col sm:px-6 sm:py-8 z-50">
+    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-4 py-2 sm:relative sm:border-t-0 sm:border-r sm:w-64 sm:h-screen sm:flex sm:flex-col sm:px-6 sm:py-8 z-40">
       <div className="hidden sm:flex items-center gap-3 mb-10 px-2">
         <div className="bg-emerald-500 p-2 rounded-xl">
           <Wallet className="text-white w-6 h-6" />

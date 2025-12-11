@@ -1,6 +1,6 @@
 import initSqlJs, { Database, SqlJsStatic } from "sql.js";
 import localforage from "localforage";
-import { Transaction, TransactionType, DEFAULT_CATEGORIES, CategoryState, NeedsWantsSummary } from "../types";
+import { Transaction, TransactionType, DEFAULT_CATEGORIES, CategoryState, NeedsWantsSummary, DebtRecord, DebtStatus } from "../types";
 
 const DB_NAME = "saku_sqlite.db";
 
@@ -61,13 +61,34 @@ class DatabaseService {
       );
     `);
 
-    // Create Monthly Analysis Table (New)
+    // Create Debts Table
+    this.db.run(`
+      CREATE TABLE IF NOT EXISTS debts (
+        id TEXT PRIMARY KEY,
+        person TEXT,
+        amount REAL,
+        date TEXT,
+        dueDate TEXT,
+        description TEXT,
+        type TEXT,
+        status TEXT
+      );
+    `);
+
+    // Create Monthly Analysis Table
     this.db.run(`
       CREATE TABLE IF NOT EXISTS monthly_analysis (
         month_id TEXT PRIMARY KEY,
         data TEXT
       );
     `);
+
+    // --- OPTIMIZATION: Create Indices ---
+    this.db.run("CREATE INDEX IF NOT EXISTS idx_tx_date ON transactions(date);");
+    this.db.run("CREATE INDEX IF NOT EXISTS idx_tx_type ON transactions(type);");
+    this.db.run("CREATE INDEX IF NOT EXISTS idx_debt_type ON debts(type);");
+    this.db.run("CREATE INDEX IF NOT EXISTS idx_debt_status ON debts(status);");
+    this.db.run("CREATE INDEX IF NOT EXISTS idx_debt_duedate ON debts(dueDate);");
 
     // Seed Default Categories if empty
     const result = this.db.exec("SELECT count(*) as count FROM categories");
@@ -99,7 +120,6 @@ class DatabaseService {
   async getTransactions(): Promise<Transaction[]> {
     if (!this.db) await this.init();
     
-    // Check if table exists (in case of fresh load issues)
     try {
         const res = this.db!.exec("SELECT * FROM transactions ORDER BY date DESC");
         if (res.length === 0) return [];
@@ -137,6 +157,46 @@ class DatabaseService {
     await this.save();
   }
 
+  // --- Debts / Receivables ---
+
+  async getDebts(): Promise<DebtRecord[]> {
+    if (!this.db) await this.init();
+    try {
+      const res = this.db!.exec("SELECT * FROM debts ORDER BY dueDate ASC");
+      if (res.length === 0) return [];
+      const columns = res[0].columns;
+      const values = res[0].values;
+      return values.map((row) => {
+        const obj: any = {};
+        columns.forEach((col, i) => { obj[col] = row[i]; });
+        return obj as DebtRecord;
+      });
+    } catch (e) {
+      return [];
+    }
+  }
+
+  async addDebt(d: DebtRecord): Promise<void> {
+    if (!this.db) await this.init();
+    this.db!.run(
+      "INSERT INTO debts (id, person, amount, date, dueDate, description, type, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      [d.id, d.person, d.amount, d.date, d.dueDate, d.description, d.type, d.status]
+    );
+    await this.save();
+  }
+
+  async updateDebtStatus(id: string, status: DebtStatus): Promise<void> {
+    if (!this.db) await this.init();
+    this.db!.run("UPDATE debts SET status = ? WHERE id = ?", [status, id]);
+    await this.save();
+  }
+
+  async deleteDebt(id: string): Promise<void> {
+    if (!this.db) await this.init();
+    this.db!.run("DELETE FROM debts WHERE id = ?", [id]);
+    await this.save();
+  }
+
   // --- Categories ---
 
   async getCategories(): Promise<CategoryState> {
@@ -154,7 +214,6 @@ class DatabaseService {
         });
     }
     
-    // Fallback if DB is empty for some reason, though initSchema should handle it
     if (categories.INCOME.length === 0) categories.INCOME = [...DEFAULT_CATEGORIES.INCOME];
     if (categories.EXPENSE.length === 0) categories.EXPENSE = [...DEFAULT_CATEGORIES.EXPENSE];
 
@@ -163,8 +222,6 @@ class DatabaseService {
 
   async addCategory(type: TransactionType, name: string): Promise<void> {
     if (!this.db) await this.init();
-
-    // Check duplicate
     const check = this.db!.exec("SELECT id FROM categories WHERE name = ? AND type = ?");
     if (check.length === 0) {
         this.db!.run("INSERT INTO categories (name, type) VALUES (?, ?)", [name, type]);
@@ -181,9 +238,7 @@ class DatabaseService {
         if (res.length > 0 && res[0].values.length > 0) {
             return JSON.parse(res[0].values[0][0] as string);
         }
-    } catch (e) {
-        // Table might not exist or empty
-    }
+    } catch (e) { }
     return null;
   }
 

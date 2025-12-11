@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Bot, User, Sparkles, Lightbulb, Loader2 } from 'lucide-react';
+import { Send, Bot, User, Sparkles, Lightbulb, Loader2, X } from 'lucide-react';
 import { ChatMessage, CategoryState, Transaction } from '../types';
 import { createChatSession, sendChatMessage, sendToolResponse } from '../services/geminiService';
 import { Chat } from '@google/genai';
@@ -7,6 +7,7 @@ import { Chat } from '@google/genai';
 interface ChatbotProps {
   onAddTransaction: (t: Transaction) => void;
   categories: CategoryState;
+  onClose: () => void;
 }
 
 const EXAMPLE_PROMPTS = [
@@ -16,7 +17,7 @@ const EXAMPLE_PROMPTS = [
   "Beda butuh vs ingin?"
 ];
 
-const Chatbot: React.FC<ChatbotProps> = ({ onAddTransaction, categories }) => {
+const Chatbot: React.FC<ChatbotProps> = ({ onAddTransaction, categories, onClose }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: 'welcome',
@@ -121,8 +122,8 @@ const Chatbot: React.FC<ChatbotProps> = ({ onAddTransaction, categories }) => {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-140px)] sm:h-[calc(100vh-80px)] bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
-      <div className="p-4 bg-indigo-600 text-white flex items-center justify-between">
+    <div className="flex flex-col h-full bg-white sm:rounded-2xl overflow-hidden shadow-2xl border border-slate-200">
+      <div className="p-4 bg-indigo-600 text-white flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2">
           <div className="bg-white/20 p-2 rounded-full">
             <Bot className="w-6 h-6" />
@@ -134,9 +135,12 @@ const Chatbot: React.FC<ChatbotProps> = ({ onAddTransaction, categories }) => {
             </p>
           </div>
         </div>
+        <button onClick={onClose} className="p-1 hover:bg-white/20 rounded-full transition-colors">
+          <X className="w-6 h-6 text-white" />
+        </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50 min-h-0">
         {messages.map((msg) => (
           <div
             key={msg.id}
@@ -201,13 +205,13 @@ const Chatbot: React.FC<ChatbotProps> = ({ onAddTransaction, categories }) => {
         <div ref={messagesEndRef} />
       </div>
 
-      <form onSubmit={handleSend} className="p-4 bg-white border-t border-slate-100">
+      <form onSubmit={handleSend} className="p-4 bg-white border-t border-slate-100 shrink-0">
         <div className="flex items-center gap-2">
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ketik pesan... (ex: 'Catat beli nasi 10rb')"
+            placeholder="Ketik pesan..."
             className="flex-1 bg-slate-100 text-slate-800 placeholder-slate-400 border-none rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
           />
           <button
