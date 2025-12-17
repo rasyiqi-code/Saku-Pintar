@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">SakuPintar</string>
+    <string name="title_activity_main">SakuPintar</string>
+    <string name="package_name">com.sakupintar.app</string>
+    <string name="custom_url_scheme">com.sakupintar.app</string>
+</resources>
