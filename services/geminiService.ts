@@ -1,31 +1,27 @@
-import { GoogleGenAI, Chat, GenerateContentResponse, FunctionDeclaration, Type, createPartFromFunctionResponse } from "@google/genai";
-import { Transaction, ChatMessage, CategoryState, TransactionType, NeedsWantsSummary, PurchaseAnalysis } from "../types";
+import { GoogleGenerativeAI, ChatSession, SchemaType, FunctionDeclaration } from "@google/generative-ai";
+import { Transaction, CategoryState, TransactionType, NeedsWantsSummary, PurchaseAnalysis } from "../types";
 
 // --- API Key Retrieval Logic ---
 const getApiKey = (): string => {
-  // 1. Vite (Standard for modern React apps)
   // @ts-ignore
   if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_KEY) {
     // @ts-ignore
     return import.meta.env.VITE_API_KEY;
   }
-  // 2. Create React App (CRA)
-  if (typeof process !== 'undefined' && process.env?.REACT_APP_API_KEY) {
-    return process.env.REACT_APP_API_KEY;
-  }
-  // 3. Fallback / Manual Process Env
-  if (typeof process !== 'undefined' && process.env?.API_KEY) {
-    return process.env.API_KEY;
+  // Fallback for manual .env
+  if (typeof process !== 'undefined' && process.env?.GEMINI_API_KEY) {
+    return process.env.GEMINI_API_KEY;
   }
   return '';
 };
 
 const apiKey = getApiKey();
-let aiClient: GoogleGenAI | null = null;
-const getClient = (): GoogleGenAI | null => {
+let genAI: GoogleGenerativeAI | null = null;
+
+const getClient = (): GoogleGenerativeAI | null => {
   if (!apiKey) return null;
-  if (!aiClient) aiClient = new GoogleGenAI({ apiKey });
-  return aiClient;
+  if (!genAI) genAI = new GoogleGenerativeAI(apiKey);
+  return genAI;
 };
 
 // --- Tool Definitions ---
@@ -34,27 +30,26 @@ const addTransactionTool: FunctionDeclaration = {
   name: "addTransaction",
   description: "Catat transaksi keuangan (pemasukan atau pengeluaran) ke dalam aplikasi.",
   parameters: {
-    type: Type.OBJECT,
+    type: SchemaType.OBJECT,
     properties: {
       type: { 
-        type: Type.STRING, 
-        enum: ["INCOME", "EXPENSE"], 
-        description: "Tipe transaksi. INCOME untuk pemasukan, EXPENSE untuk pengeluaran." 
+        type: SchemaType.STRING, 
+        description: "Tipe transaksi. Harus bernilai 'INCOME' untuk pemasukan, atau 'EXPENSE' untuk pengeluaran." 
       },
       amount: { 
-        type: Type.NUMBER, 
+        type: SchemaType.NUMBER, 
         description: "Jumlah uang dalam Rupiah (angka saja)." 
       },
       category: { 
-        type: Type.STRING, 
+        type: SchemaType.STRING, 
         description: "Kategori transaksi. Pilih yang paling sesuai dari daftar yang tersedia." 
       },
       description: { 
-        type: Type.STRING, 
+        type: SchemaType.STRING, 
         description: "Keterangan singkat transaksi." 
       },
       date: { 
-        type: Type.STRING, 
+        type: SchemaType.STRING, 
         description: "Tanggal transaksi dalam format YYYY-MM-DD. Gunakan hari ini jika tidak disebutkan." 
       }
     },
@@ -68,7 +63,7 @@ const addTransactionTool: FunctionDeclaration = {
 export interface ChatInteractionResult {
   text?: string;
   toolCall?: {
-    id: string;
+    id: string; // Not used in new SDK but kept for compatibility
     name: string;
     args: any;
   };
@@ -78,7 +73,7 @@ export interface ChatInteractionResult {
  * Uses Gemini Flash for quick analysis of financial data.
  */
 export const analyzeFinances = async (transactions: Transaction[]): Promise<string> => {
-  if (!apiKey) return "API Key belum disetting. Mohon konfigurasi VITE_API_KEY di Vercel.";
+  if (!apiKey) return "API Key belum disetting. Mohon konfigurasi VITE_API_KEY.";
 
   try {
     const transactionSummary = transactions.map(t => 
@@ -97,19 +92,18 @@ export const analyzeFinances = async (transactions: Transaction[]): Promise<stri
     `;
 
     const client = getClient();
-    if (!client) return "API Key belum disetting. Mohon konfigurasi VITE_API_KEY di Vercel.";
-    const response = await client.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      config: {
-        systemInstruction: "Kamu adalah asisten keuangan SakuPintar yang cerdas dan ramah."
-      }
+    if (!client) return "API Key belum disetting.";
+    
+    const model = client.getGenerativeModel({ 
+      model: "gemini-2.5-flash",
+      systemInstruction: "Kamu adalah asisten keuangan SakuPintar yang cerdas dan ramah."
     });
 
-    return response.text || "Maaf, saya tidak bisa menganalisis data saat ini.";
+    const result = await model.generateContent(prompt);
+    return result.response.text();
   } catch (error) {
     console.error("Error analyzing finances:", error);
-    return "Terjadi kesalahan saat menghubungi asisten AI. Pastikan API Key valid.";
+    return "Terjadi kesalahan saat menghubungi asisten AI.";
   }
 };
 
@@ -126,10 +120,7 @@ export const parseTransactionWithAI = async (
   date: string;
   description: string;
 } | null> => {
-  if (!apiKey) {
-    alert("API Key missing. Please set VITE_API_KEY.");
-    return null;
-  }
+  if (!apiKey) return null;
 
   try {
     const today = new Date().toISOString().split('T')[0];
@@ -161,17 +152,14 @@ export const parseTransactionWithAI = async (
 
     const client = getClient();
     if (!client) return null;
-    const response = await client.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json'
-      }
+    
+    const model = client.getGenerativeModel({ 
+        model: "gemini-2.5-flash",
+        generationConfig: { responseMimeType: "application/json" }
     });
 
-    const jsonText = response.text;
-    if (!jsonText) return null;
-
+    const result = await model.generateContent(prompt);
+    const jsonText = result.response.text();
     return JSON.parse(jsonText);
   } catch (error) {
     console.error("Error parsing transaction with AI:", error);
@@ -187,7 +175,6 @@ export const analyzeNeedsWantsBatch = async (transactions: Transaction[]): Promi
 
   try {
     const expenseTransactions = transactions.filter(t => t.type === 'EXPENSE');
-    
     if (expenseTransactions.length === 0) return null;
 
     const summaryList = expenseTransactions.map(t => 
@@ -200,43 +187,37 @@ export const analyzeNeedsWantsBatch = async (transactions: Transaction[]): Promi
 
       Tasks:
       1. Classify each transaction ID as either "NEED" (Kebutuhan) or "WANT" (Keinginan).
-         - NEEDS: Essentials like Food (regular), Transport, School supplies, Zakat/Infaq.
-         - WANTS: Entertainment, Games, Expensive snacks, Impulse buys.
-      2. Provide a short "insight" paragraph summarizing their spending behavior based on this split.
+      2. Provide a short "insight" paragraph summarizing their spending behavior based on this split. USE INDONESIAN LANGUAGE ONLY. Gaya bahasa santai untuk siswa.
 
       Response Format (JSON):
       {
         "breakdown": [
           {"id": "string", "verdict": "NEED" | "WANT"}
         ],
-        "insight": "string"
+        "insight": "string (Bahasa Indonesia)"
       }
     `;
 
     const client = getClient();
     if (!client) return null;
-    const response = await client.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json'
-      }
+    
+    const model = client.getGenerativeModel({ 
+        model: "gemini-2.5-flash",
+        generationConfig: { responseMimeType: "application/json" }
     });
 
-    const jsonText = response.text;
-    if (!jsonText) return null;
-
-    const result = JSON.parse(jsonText);
+    const result = await model.generateContent(prompt);
+    const parsed = JSON.parse(result.response.text());
     
-    // Calculate totals locally to ensure accuracy
+    // Calculate totals locally
     let needsTotal = 0;
     let wantsTotal = 0;
-    const breakdownMap = new Map(result.breakdown.map((b: any) => [b.id, b.verdict]));
+    const breakdownMap = new Map(parsed.breakdown.map((b: any) => [b.id, b.verdict]));
 
     expenseTransactions.forEach(t => {
       const verdict = breakdownMap.get(t.id);
       if (verdict === 'NEED') needsTotal += t.amount;
-      else wantsTotal += t.amount; // Default to WANT if undefined
+      else wantsTotal += t.amount;
     });
 
     const total = needsTotal + wantsTotal;
@@ -246,8 +227,8 @@ export const analyzeNeedsWantsBatch = async (transactions: Transaction[]): Promi
       wantsTotal,
       needsPercentage: total === 0 ? 0 : Math.round((needsTotal / total) * 100),
       wantsPercentage: total === 0 ? 0 : Math.round((wantsTotal / total) * 100),
-      insight: result.insight,
-      breakdown: result.breakdown
+      insight: parsed.insight,
+      breakdown: parsed.breakdown
     };
 
   } catch (error) {
@@ -257,14 +238,14 @@ export const analyzeNeedsWantsBatch = async (transactions: Transaction[]): Promi
 };
 
 /**
- * Analyzes a specific potential purchase to determine if it is a Need or Want.
+ * Analyzes a specific potential purchase.
  */
 export const analyzePurchase = async (item: string, price: number, reason: string): Promise<PurchaseAnalysis> => {
   if (!apiKey) {
     return {
       verdict: 'WANT',
       score: 0,
-      reasoning: "API Key tidak ditemukan. Cek konfigurasi Vercel.",
+      reasoning: "API Key tidak ditemukan.",
       recommendation: "Gagal memuat AI.",
       alternatives: "-"
     };
@@ -280,15 +261,15 @@ export const analyzePurchase = async (item: string, price: number, reason: strin
       Task:
       1. Determine if this is a "NEED" (Kebutuhan) or "WANT" (Keinginan).
       2. Assign a necessity score (0-100).
-      3. Provide reasoning, recommendation, and alternatives.
+      3. Provide reasoning, recommendation, and alternatives in INDONESIAN LANGUAGE.
 
       Response Format (JSON):
       {
         "verdict": "NEED" | "WANT",
         "score": number,
-        "reasoning": "string",
-        "recommendation": "string",
-        "alternatives": "string"
+        "reasoning": "string (Bahasa Indonesia)",
+        "recommendation": "string (Bahasa Indonesia)",
+        "alternatives": "string (Bahasa Indonesia)"
       }
     `;
 
@@ -300,18 +281,14 @@ export const analyzePurchase = async (item: string, price: number, reason: strin
       recommendation: "Gagal memuat AI.",
       alternatives: "-"
     };
-    const response = await client.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      config: {
-        responseMimeType: 'application/json'
-      }
+
+    const model = client.getGenerativeModel({ 
+        model: "gemini-2.5-flash",
+        generationConfig: { responseMimeType: "application/json" }
     });
 
-    const jsonText = response.text;
-    if (!jsonText) throw new Error("Empty response");
-
-    return JSON.parse(jsonText);
+    const result = await model.generateContent(prompt);
+    return JSON.parse(result.response.text());
   } catch (error) {
     console.error("Error analyzing purchase:", error);
     return {
@@ -325,80 +302,84 @@ export const analyzePurchase = async (item: string, price: number, reason: strin
 };
 
 /**
- * Creates a chat session for the AI Advisor using Gemini Pro.
+ * Creates a chat session for the AI Advisor using Gemini 2.0 Flash.
  */
-export const createChatSession = (categories: CategoryState): Chat | null => {
+export const createChatSession = (categories: CategoryState): ChatSession | null => {
   const client = getClient();
   if (!client) return null;
 
   const incomeCats = categories.INCOME.join(', ');
   const expenseCats = categories.EXPENSE.join(', ');
 
-  return client.chats.create({
-    model: 'gemini-3-pro-preview',
-    config: {
-      tools: [{ functionDeclarations: [addTransactionTool] }],
-      systemInstruction: `
-        Kamu adalah "SakuBot", teman chat AI di aplikasi SakuPintar.
-        
-        TUGAS UTAMA:
-        1. Jawab pertanyaan siswa tentang keuangan dengan santai.
-        2. BANTU MENCATAT TRANSAKSI. Jika user mengatakan ingin mencatat pengeluaran/pemasukan, GUNAKAN tool 'addTransaction'.
-        3. Analisis Kebutuhan vs Keinginan jika diminta.
-        
-        KATEGORI YANG TERSEDIA:
-        - Pemasukan: ${incomeCats}
-        - Pengeluaran: ${expenseCats}
-        
-        PRINSIP CSIZ (Kejar target ini):
-        - Konsumsi (C) <= 65%
-        - Tabungan (S) >= 10% (Kategori: Tabungan)
-        - Investasi (I) >= 20% (Kategori: Investasi)
-        - ZIS (Z) >= 5% (Kategori: Zakat/Infaq/Sedekah)
-        
-        Gunakan emoji, jadilah ramah dan memotivasi!
-      `,
-    },
+  const model = client.getGenerativeModel({
+    model: "gemini-2.5-flash",
+    tools: [{ functionDeclarations: [addTransactionTool] }],
+    systemInstruction: `
+      Kamu adalah "SakuBot", teman chat AI di aplikasi SakuPintar.
+      
+      TUGAS UTAMA:
+      1. Jawab pertanyaan siswa tentang keuangan dengan santai.
+      2. BANTU MENCATAT TRANSAKSI. Jika user mengatakan ingin mencatat pengeluaran/pemasukan, GUNAKAN tool 'addTransaction'.
+      3. Analisis Kebutuhan vs Keinginan jika diminta.
+      
+      KATEGORI YANG TERSEDIA:
+      - Pemasukan: ${incomeCats}
+      - Pengeluaran: ${expenseCats}
+      
+      Gunakan emoji, jadilah ramah dan memotivasi!
+    `
+  });
+
+  return model.startChat({
+    history: []
   });
 };
 
 /**
  * Sends a message to the chat session and handles potential tool calls.
  */
-export const sendChatMessage = async (chat: Chat, message: string): Promise<ChatInteractionResult> => {
-  if (!apiKey) return { text: "API Key belum disetting. Mohon atur Environment Variable di Vercel (VITE_API_KEY)." };
-
+export const sendChatMessage = async (chat: ChatSession, message: string): Promise<ChatInteractionResult> => {
   try {
-    const result: GenerateContentResponse = await chat.sendMessage({ message });
+    const result = await chat.sendMessage(message);
+    const response = await result.response;
     
     // Check for tool calls
-    if (result.functionCalls && result.functionCalls.length > 0) {
-      const fc = result.functionCalls[0];
+    const functionCalls = response.functionCalls();
+    if (functionCalls && functionCalls.length > 0) {
+      const fc = functionCalls[0];
       return {
-        text: undefined, // Model usually doesn't output text when calling a tool
+        text: undefined,
         toolCall: {
-          id: fc.id,
+          id: fc.name, // New SDK uses name as ID effectively for single tool calls
           name: fc.name,
           args: fc.args
         }
       };
     }
 
-    return { text: result.text || "Maaf, saya tidak mengerti." };
+    return { text: response.text() };
   } catch (error) {
     console.error("Chat error:", error);
-    return { text: "Waduh, koneksi ke otak AI terputus sebentar. Coba lagi ya!" };
+    return { text: `Error: ${(error as any).message || "Unknown error"}` };
   }
 };
 
 /**
  * Sends the result of a tool execution back to the model.
  */
-export const sendToolResponse = async (chat: Chat, toolCallId: string, functionName: string, result: any): Promise<string> => {
+export const sendToolResponse = async (chat: ChatSession, toolCallId: string, functionName: string, result: any): Promise<string> => {
   try {
-    const part = createPartFromFunctionResponse(toolCallId, functionName, { result });
-    const response = await chat.sendMessage({ message: [part] });
-    return response.text || "Oke!";
+    const resultPayload = [
+      {
+        functionResponse: {
+          name: functionName,
+          response: { result: result }
+        }
+      }
+    ];
+    
+    const response = await chat.sendMessage(resultPayload);
+    return response.response.text();
   } catch (error) {
     console.error("Tool response error:", error);
     return "Berhasil disimpan, tapi saya lupa mau bilang apa.";

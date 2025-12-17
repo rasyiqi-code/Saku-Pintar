@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Send, Bot, User, Sparkles, Lightbulb, Loader2, X } from 'lucide-react';
 import { ChatMessage, CategoryState, Transaction } from '../types';
 import { createChatSession, sendChatMessage, sendToolResponse } from '../services/geminiService';
-import { Chat } from '@google/genai';
+import { ChatSession } from '@google/generative-ai';
 
 interface ChatbotProps {
   onAddTransaction: (t: Transaction) => void;
@@ -29,7 +29,7 @@ const Chatbot: React.FC<ChatbotProps> = ({ onAddTransaction, categories, onClose
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isProcessingTool, setIsProcessingTool] = useState(false);
-  const chatSessionRef = useRef<Chat | null>(null);
+  const chatSessionRef = useRef<ChatSession | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
